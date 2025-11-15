@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, List
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import json
@@ -11,13 +11,6 @@ import random
 app = FastAPI()
 
 
-class Item(BaseModel):
-    name: str
-    description: Union[str, None] = "Описание товара"
-    price: float
-    id: Union[int, None] = -1
-    
-    
 class User(BaseModel):
     login:str
     email: str
@@ -32,39 +25,12 @@ class AuthUser(BaseModel):
     password: str
 
 
-@app.post("/items/create")
-def create_item(item: Item):
-    item.id = int(time.time())
+class SortRequest(BaseModel):
+    array: List[int]
     
-    with open(f"items/item_{item.id}.json", 'w') as f:
-        json.dump(item.model_dump(), f)
-        return item
-    
-@app.get("/items/print")
-def all_items(request: Request):
-    token = request.headers.get('Authorization')
-    print(token)
-    if token != 'xxx':
-        raise HTTPException(status_code=401, detail="Invalid token")
-    json_files_names = [file for file in os.listdir('items/') if file.endswith('.json')]
-    data = []
-    for json_file_name in json_files_names:
-        file_path = os.path.join('items/', json_file_name)
-        with open(file_path, 'r') as f:
-            data.append(json.load(f))
-    return data
 
 @app.post("/users/reg")
 def create_user(user: User):
-    
-    if len(user.login) < 8:
-        raise HTTPException(status_code=400, detail="Слишком короткий логин")
-    
-    if len(user.password) < 8:
-        raise HTTPException(status_code=400, detail="Слишком короткий пароль")
-    
-    if "@" not in user.email:
-        raise HTTPException(status_code=400, detail="Некорректный email")
        
     # Проверка существования пользователя
     for file in os.listdir("users"):
@@ -96,4 +62,24 @@ def auth_user(params: AuthUser):
     raise HTTPException(status_code=401, detail="Неверный логин или пароль")
 
 
+@app.post("/sort/gnom")
+def sort_gnom(request: SortRequest):
+    try:
+        array = request.array.copy()
+        n = len(array)
+        i = 0
+        while i < n - 1:
+            if array[i] <= array[i + 1]:
+                i += 1
+            else:
+                array[i], array[i + 1] = array[i + 1], array[i]
+                if i > 0:
+                    i -= 1
+        return {"original": request.array, "sorted": array}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при сортировке")
+
+
     
+
