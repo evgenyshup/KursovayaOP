@@ -2,15 +2,7 @@ import requests
 import json
 from pydantic import BaseModel
 from typing import Union
-
-class Item(BaseModel):
-    name: str
-    description: Union[str, None] = "Описание товара"
-    price: float
-    id: Union[int, None] = -1
-    
-    def __str__(self):
-        return f"Товар: {self.name}, стоимость: {self.price} рублей"
+import re
     
     
 class User(BaseModel):
@@ -21,7 +13,7 @@ class User(BaseModel):
 
 class AuthUser(BaseModel):
     login: str
-    password: str   
+    password: str
 
 
 def send_get(url):
@@ -29,47 +21,49 @@ def send_get(url):
     response = requests.get(url, headers = headers)
     return response.text, response.status_code
 
+def validate_login(login):
+    if len(login) < 8:
+        print("Ошибка: Логин должен содержать не менее 8 символов")
+        return False
+    return True
 
-def all_items():
-    result, code = send_get("http://localhost:8000/items/print")
-    match code:
-        case 200:
-            json_items = json.loads(result)
-            for json_item in json_items:
-                item = Item(**json_item)
-                print(item)
-                
-        case 401:
-            print("Неверные авторизацинные данные")
+def validate_email(email):
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        print("Ошибка: Неверный формат email. Пример: user@gmail.com")
+        return False
+    return True
 
-        case 403:
-            print("Доступ ограничен")
-        
-        case _:
-            print("Неизвестная ошибка")
-
-
-def create_item():
-    print("\nДОБАВЛЕНИЕ ТОВАРА")
-    name = input("Название товара: ")
-    price = float(input("Цена товара: "))
-    
-    item_data = Item(name=name, price=price)
-    
-    response = requests.post("http://localhost:8000/items/create", json=item_data.model_dump())
-    
-    if response.status_code == 200:
-        created_item = Item(**response.json())
-        print(created_item)
-    else:
-        print("Ошибка добавления товара")
-
+def validate_password(password):
+    password_pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{10,}$'
+    if not re.match(password_pattern, password):
+        print("Ошибка: Пароль должен содержать мин. 10 символов, заглавные/строчные буквы, спецсимволы")
+        return False
+    return True
 
 def reg():
-    print("\nРЕГИСТРАЦИЯ")
-    login = input("Логин: ")
-    email = input("Email: ")
-    password = input("Пароль: ")
+    while True:
+        login = input("Введите логин: ")
+        if validate_login(login):
+            break
+    
+    while True:
+        email = input("Введите email: ")
+        if validate_email(email):
+            break
+    
+    while True:
+        password = input("Введите пароль: ")
+        if validate_password(password):
+            break
+    
+    while True:
+        confirm_password = input("Повторите пароль: ")
+        if password == confirm_password:
+            print("Пароли совпадают")
+            break
+        else:
+            print("Ошибка: Пароли не совпадают. Попробуйте еще раз.")
     
     user_data = User(login=login, email=email, password=password)
     
@@ -96,9 +90,7 @@ def auth():
     
     if response.status_code == 200:
         user = response.json()
-        print(f"\nАвторизация прошла успешно")
-        print(f"Логин: {user['login']}")
-        print(f"Токен: {user['token']}")
+        print(f"\nАвторизация {user['login']} прошла успешно")
         return True
     else:
         error = response.json().get('detail', 'Ошибка')
@@ -106,25 +98,70 @@ def auth():
         return False
         
                
+def sort_arr():
+    print("\nСОРТИРОВКА МАССИВА")
+    print("1 - Ввести массив вручную")
+    print("2 - Сгенерировать случайный массив")
+    print("3 - Назад")
+     
+    choice = input("Выберите действие: ")
+    
+    if choice == "1":
+        array_input = input("Введите числа через пробел: ")
+        try:
+            array = [int(x) for x in array_input.split()]
+            response = requests.post("http://localhost:8000/sort/gnom", json={"array": array})
+            result = response.json()
+            
+            print(f"Исходный: {result['original']}")
+            print(f"Отсортированный: {result['sorted']}")
+            
+        except ValueError:
+            print("Ошибка корректности ввода")
+    
+    elif choice == "2":
+        try:
+            size = int(input("Введите размер массива: "))
+            if size >= 0:
+                import random
+                array = [random.randint(1, 100) for _ in range(size)]
+                response = requests.post("http://localhost:8000/sort/gnom", json={"array": array})
+                result = response.json()
+            
+                print(f"\nИсходный: {result['original']}")
+                print(f"Отсортированный: {result['sorted']}")
+            else: 
+                print("Размер массива не может быть отрицательным")
+        except ValueError:
+            print("Ошибка корректности ввода")
+    
+    elif choice == "3":
+        return
+
+    else: print("Неверно введена команда")
+               
+               
 def main_menu():
     
     while True:
         try:
             print("\nВведите команду:")
-            command = int(input("1 - Список товаров\n2 - Добавить товар\n3 - Выйти из профиля\n"))
+            command = int(input("1 - Сортировка\n2 - История сортировок\n3 - Управление уч.записью\n4 - Выход из профиля\n"))
             
             match command:
                 case 1:
-                    all_items()
+                    sort_arr()
                 case 2:
-                    create_item()
+                    print("Здесь будет история сортировок")
                 case 3:
+                    print("Здесь будет управление уч.записью")    
+                case 4:
                     break
                 case _:
-                    print("Нет такого выбора")
+                    print("Неверная команда!")
                     
         except ValueError:
-            print("Некорректный ввод!")
+            print("Неверно введена команда!")
             
             
 while True:
@@ -143,9 +180,10 @@ while True:
                 print("Конец")
                 break
             case _:
-                print("Нет такого выбора")
+                print("Неверная команда!")
                 
     except ValueError:
-        print("Некорректный ввод!")
+        print("Неверно введена команда!")
         
+
         
